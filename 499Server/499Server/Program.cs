@@ -18,10 +18,35 @@ namespace _499Server
         private static byte[] buffr;// = new byte[1024];
 
         //A dictionary for storing files along with the client that owns them
-        private static Dictionary<string, Socket> fileDict;
+        private static Dictionary<string, Queue<Socket>> fileDict;
 
         //A static variable for showing what port the server is operating on
         private static int portNum;
+
+        /*  THINGS TO THINK ABOUT/TO DO
+
+            Send is synchronous, BeginSend is Asynchronous
+                Send is faster overall, but BeginSend is for when you want the server to do something else while it is sending data
+            
+            How to determine what data will be revieved?
+                Create and Call seperate functions when we anticipate specific data
+                Ex: After client calls get: something, it can call GetFileFromClient which connects to a client, sends the request, and anticipates file transfer data
+
+            Thread
+                We will need seperate threads for various tasks, but for what?
+                A new thread for each client that connects?
+                A new thread in clients for connecting to another client for file transfer?
+
+            Dictionary <string, Queue<Socket> >
+                How to add a Socket to the Queue?
+
+            Clients Sending Files
+                Clients should maybe send all files at once?
+                A list of files, each relating to the same socket
+                This would mean when a new client connects, we look at the list given, check our dictionary for the key, if it exists, add the socket to the list
+
+            Serialization of Objects
+        */
 
         static void Main(string[] args)
         {
@@ -52,7 +77,7 @@ namespace _499Server
             listenSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
             clientList = new List<Socket>();
             buffr = new byte[1024];
-            fileDict = new Dictionary<string, Socket>();
+            fileDict = new Dictionary<string, Queue<Socket>>();
             portNum = 100;
 
             //Get Connection Information
@@ -147,16 +172,37 @@ namespace _499Server
                     break;
                 case "add":
                     Console.WriteLine("Attempting to Add File {0} to List of Files", words[1]);
-                    fileDict.Add(words[1], socket);
+                    //When we go to Add the file to the dictionary, we first check to see if the file is already there
+                    if (fileDict.ContainsKey(words[1]))
+                    {
+                        //If the File is already there, we Enqueue the Socket associated with it
+                        fileDict[words[1]].Enqueue(socket);
+                    }
+                    else
+                    {
+                        //If it isnt, the Key is added along with a new instance of a Socket Queue which we can access to add the socket
+                        fileDict.Add(words[1], new Queue<Socket>());
+                        fileDict[words[1]].Enqueue(socket);
+                    }
                     data = Encoding.ASCII.GetBytes("Added File");
                     socket.Send(data);
                     Console.WriteLine("Added File {0} to List of Files\n", words[1]);
                     break;
                 case "get":
                     Console.WriteLine("Attempting to get Information for File {0}", words[1]);
-                    Socket fileSocket = fileDict[words[1]];
-                    IPEndPoint remoteIP = fileSocket.LocalEndPoint as IPEndPoint;
-                    string textToSend = "The IP address of the client with file" + words[1] + " is " + remoteIP.Address + " with port number " + remoteIP.Port;
+                    Socket fileSocket;
+                    string textToSend;
+                    if (fileDict.ContainsKey(words[1]))
+                    {
+                        fileSocket = fileDict[words[1]].Dequeue();
+                        IPEndPoint remoteIP = fileSocket.LocalEndPoint as IPEndPoint;
+                        textToSend = "The IP address of the client with file" + words[1] + " is " + remoteIP.Address + " with port number " + remoteIP.Port;
+
+                    }
+                    else
+                    {
+                        textToSend = "File Could not be Found";
+                    }
                     Console.WriteLine(textToSend);
                     Console.WriteLine();
                     data = Encoding.ASCII.GetBytes(textToSend);

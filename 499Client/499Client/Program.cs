@@ -8,6 +8,20 @@ namespace _499Client
 {
     class Program
     {
+        /* THINGS TO DO/THINK ABOUT
+        
+            Getting Files from other Clients
+                we get the IP address and port when we call get file
+                We need to intercept the client input and not send it
+                call a function where a new socket is created, requests file
+                Clients need a function to accept a new connection and send data
+                Clients need to have a list of sockets connected to them
+                Clients may need two thread: one to communicate with server, one to communicate with clients
+
+            
+        */
+
+
         private static Socket clientSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
 
         static void Main(string[] args)
