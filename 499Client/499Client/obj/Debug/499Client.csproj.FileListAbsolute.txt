@@ -1,0 +1,5 @@
+c:\users\dave\documents\visual studio 2015\Projects\499Client\499Client\bin\Debug\499Client.exe.config
+C:\Users\Dave\Documents\Visual Studio 2015\Projects\499Client\499Client\bin\Debug\499Client.exe
+C:\Users\Dave\Documents\Visual Studio 2015\Projects\499Client\499Client\bin\Debug\499Client.pdb
+C:\Users\Dave\Documents\Visual Studio 2015\Projects\499Client\499Client\obj\Debug\499Client.exe
+C:\Users\Dave\Documents\Visual Studio 2015\Projects\499Client\499Client\obj\Debug\499Client.pdb
