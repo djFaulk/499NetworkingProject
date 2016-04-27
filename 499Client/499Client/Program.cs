@@ -20,13 +20,18 @@ namespace _499Client
                 Clients need to have a list of sockets connected to them
                 Clients may need two thread: one to communicate with server, one to communicate with clients
 
+            dont use ports under 1024
+
             
         */
 
 
         private static List<Socket> otherClients;
+
         private static Socket listenSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-        private static Socket servSendSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        private static Socket clientConnectSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        private static Socket serverConnectSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+
         private static byte[] buffr;
         private const int buffrSize = 1024;
         private static List<string> fileList;
@@ -41,7 +46,9 @@ namespace _499Client
 
         private static void InitClient()
         {
-            Console.WriteLine("Please enter the local IP of the machine you wish to connect to. Press return to loopback: ");
+            //Initialize Client Data
+            //Connect to Server
+            Console.WriteLine("Please enter the local IP of the machine you wish to connect to.");
             string IPstring = Console.ReadLine();
             IPAddress serverIP;
             try
@@ -56,7 +63,7 @@ namespace _499Client
             }
 
             //Two threads: One to connect to server and send data, one to wait for a connection
-            //Init List object
+            //Initialize Global variables
             otherClients = new List<Socket>();
             buffr = new byte[buffrSize];
             fileList = new List<string>();
@@ -73,8 +80,8 @@ namespace _499Client
         private static void Exit()
         {
             Console.WriteLine("Exiting...");
-            servSendSocket.Shutdown(SocketShutdown.Both);
-            servSendSocket.Close();
+            serverConnectSocket.Shutdown(SocketShutdown.Both);
+            serverConnectSocket.Close();
             Environment.Exit(0);
         }
 
@@ -151,14 +158,14 @@ namespace _499Client
         private static void SendString(string text)
         {
             byte[] buffer = Encoding.ASCII.GetBytes(text);
-            servSendSocket.Send(buffer, 0, buffer.Length, SocketFlags.None); //exception  Specified argument was out of the range of valid values.
+            serverConnectSocket.Send(buffer, 0, buffer.Length, SocketFlags.None); //exception  Specified argument was out of the range of valid values.
         }
 
         private static void RecvData()
         {
             //Recieve Data
             byte[] recbuffer = new byte[1024];
-            int rec = servSendSocket.Receive(recbuffer, SocketFlags.None);
+            int rec = serverConnectSocket.Receive(recbuffer, SocketFlags.None);
             if (rec == 0) return;
             byte[] data = new byte[rec];
             Array.Copy(recbuffer, data, rec);
@@ -170,7 +177,7 @@ namespace _499Client
         {
             //Recieving IP. Attempt to Connect
             byte[] recbuffer = new byte[1024];
-            int rec = servSendSocket.Receive(recbuffer, SocketFlags.None);
+            int rec = serverConnectSocket.Receive(recbuffer, SocketFlags.None);
             if (rec == 0) return;
             byte[] data = new byte[rec];
             Array.Copy(recbuffer, data, rec);
@@ -191,13 +198,13 @@ namespace _499Client
         {
             int attempts = 0;
 
-            while (!servSendSocket.Connected)
+            while (!serverConnectSocket.Connected)
             {
                 try
                 {
                     attempts++;
                     Console.WriteLine("Connection Attempts: " + attempts);
-                    servSendSocket.Connect(serverIP, port);
+                    serverConnectSocket.Connect(serverIP, port);
                 }
                 catch (SocketException s)
                 {
@@ -208,6 +215,11 @@ namespace _499Client
 
             Console.Clear();
             Console.WriteLine("Connected");
+            byte[] data = new byte[buffrSize];
+            IPEndPoint ipEnd = listenSocket.LocalEndPoint as IPEndPoint;
+            data = Encoding.ASCII.GetBytes(ipEnd.Port.ToString());
+            serverConnectSocket.Send(data);
+            Console.WriteLine("Client is listening on port:" + ipEnd.Port);
             SendLoop();
         }
 
@@ -215,13 +227,13 @@ namespace _499Client
         {
             int attempts = 0;
 
-            while (!servSendSocket.Connected)
+            while (!serverConnectSocket.Connected)
             {
                 try
                 {
                     attempts++;
                     Console.WriteLine("Connection Attempts: " + attempts);
-                    servSendSocket.Connect(serverIP, port);
+                    serverConnectSocket.Connect(serverIP, port);
                 }
                 catch (SocketException s)
                 {
@@ -273,7 +285,8 @@ namespace _499Client
             Console.WriteLine("Intializing Listen on Client...");
             IPHostEntry ipHost = Dns.GetHostEntry(Dns.GetHostName());
             IPAddress ipAddress = getLocalIP();
-            IPEndPoint localEndPoint = new IPEndPoint(ipAddress, 0);
+            //int fuckDavid = get new random integer really fucking high then print this out and use it as the port you listen on
+            IPEndPoint localEndPoint = new IPEndPoint(ipAddress, );
 
             try
             {
@@ -291,6 +304,7 @@ namespace _499Client
         private static void AcceptCallback(IAsyncResult IAR)
         {
             Socket clientSocket;
+
             try
             {
                 clientSocket = listenSocket.EndAccept(IAR);

@@ -145,6 +145,9 @@ namespace _499Server
             byte[] tempBuffr = new byte[recv];
             Array.Copy(buffr, tempBuffr, recv);
 
+            int listenPort = Int32.Parse(Encoding.ASCII.GetString(tempBuffr));
+            Console.WriteLine("Socket is listening on Port: " + listenPort);
+
             string text = Encoding.ASCII.GetString(tempBuffr);
             Console.WriteLine("Text Recieved: " + text);
 
