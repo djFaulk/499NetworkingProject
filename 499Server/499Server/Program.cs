@@ -10,7 +10,8 @@ namespace _499Server
     class Program
     {
         //Global List of Clients
-        private static List<Socket> clientList;// = new List<Socket>();
+        private static List<Socket> clientList;
+        private static List<string> clientInfoList;
 
         //Global Variable for Server's Socket
         private static Socket listenSocket;// = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
@@ -19,10 +20,12 @@ namespace _499Server
         private static byte[] buffr;// = new byte[1024];
 
         //A dictionary for storing files along with the client that owns them
-        private static Dictionary<string, List<Socket>> fileDict;
+        private static Dictionary<string, List<string>> fileDict;
 
         //A static variable for showing what port the server is operating on
         private static int portNum;
+
+        private const int buffSize = 1024;
         //Listens for Clients, each time a new client connects, give it a thread and serve it
         //WE have a thread to listen for clients, each time a client connects, we give it a thread
 
@@ -81,23 +84,27 @@ namespace _499Server
             listenSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
             clientList = new List<Socket>();
             buffr = new byte[1024];
-            fileDict = new Dictionary<string, List<Socket>>();
-            portNum = 100;
+            fileDict = new Dictionary<string, List<string>>();
+            clientInfoList = new List<string>();
 
             //Get Connection Information
             IPHostEntry ipHost = Dns.GetHostEntry(Dns.GetHostName());
             Console.WriteLine("The Host Name is: " + Dns.GetHostName());
             IPAddress ipAddress = getLocalIP();
             Console.WriteLine("The IP Address is: " + ipAddress.ToString());
-            IPEndPoint localEndPoint = new IPEndPoint(ipAddress, 100);
+            Random rand = new Random();
+            portNum = rand.Next(1024, 60000);
+            Console.WriteLine("The Server is listening on Port: {0}", portNum);
+            IPEndPoint localEndPoint = new IPEndPoint(ipAddress, portNum);
 
             //Attempt to begin listening for Traffic
             try
             {
                 listenSocket.Bind(localEndPoint);
-                listenSocket.Listen(5);
-                //Thread listenLoop = new Thread(new ThreadStart(ListenLoop));
-                listenSocket.BeginAccept(AcceptCallback, null);
+                listenSocket.Listen(1);
+                Thread listenThread = new Thread(new ThreadStart(ListenLoop));
+                listenThread.Start();
+                //listenSocket.BeginAccept(AcceptCallback, null);
                 Console.WriteLine("Server Initialized.");
             }
             catch (Exception e)
@@ -105,7 +112,169 @@ namespace _499Server
                 Console.WriteLine(e.ToString());
             }
         }
+        private static void ListenLoop()
+        {
+            while (true)
+            {
+                Socket handler;
+                try
+                {
+                    handler = listenSocket.Accept();
+                    clientList.Add(handler);
+                    Thread clientServe = new Thread(() => ServeLoop(handler));
+                    clientServe.Start();
+                }
+                catch(Exception e)
+                {
+                    Console.WriteLine(e.ToString());
+                    return;
+                }
+
+                Console.WriteLine("Client has connected.");
+            }
+
+        }
         
+        private static void ServeLoop(Socket client)
+        {
+            int listenPortRecv;
+            byte[] listenPortBuff = new byte[buffSize];
+            try
+            {
+                listenPortRecv = client.Receive(listenPortBuff, SocketFlags.None);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.ToString());
+                client.Close();
+                clientList.Remove(client);
+                return;
+            }
+
+            int listenPort = Int32.Parse(Encoding.ASCII.GetString(listenPortBuff,0,listenPortRecv));
+            Console.WriteLine("Client is listening on: {0}", listenPort);
+
+            IPEndPoint clientEndPoint = client.LocalEndPoint as IPEndPoint;
+            IPAddress clientIP = clientEndPoint.Address;
+            string[] clientInfoArray = { clientIP.ToString(), listenPort.ToString()};
+            string clientInfo = string.Join(":", clientInfoArray);
+            clientInfoList.Add(clientInfo);
+            Console.WriteLine("Client Info is: {0}", clientInfo);
+
+            while (true)
+            {
+                int recv;
+                byte[] recvBuff = new byte[buffSize];
+                try
+                {
+                    recv = client.Receive(recvBuff, SocketFlags.None);
+                }
+                catch (SocketException)
+                {
+                    Console.WriteLine("Client has disconnected.");
+                    client.Close();
+                    clientList.Remove(client);
+                    return;
+                }
+
+                string text = Encoding.ASCII.GetString(recvBuff, 0, recv);
+                Console.WriteLine("Recieved: {0}", text);
+
+                char[] delimiterChars = { ':' };
+                string[] words = text.Split(delimiterChars);
+
+                byte[] data;
+                string input = words[0].ToLower();
+                List<string> files = new List<string>();
+                switch (input)
+                {
+                    case "getservertime":
+                        Console.WriteLine("Sending Time...");
+                        data = Encoding.ASCII.GetBytes(DateTime.Now.ToLongTimeString());
+                        client.Send(data);
+                        Console.WriteLine("Time Sent\n");
+                        break;
+                    case "getserverip":
+                        Console.WriteLine("Attempting to Get IP Address...");
+                        string ipAddress = getLocalIP().ToString();
+                        data = Encoding.ASCII.GetBytes(ipAddress);
+                        client.Send(data);
+                        Console.WriteLine("Local IP Address is: " + ipAddress);
+                        Console.WriteLine("Local IP Address Sent.\n");
+                        break;
+                    case "getserverport":
+                        Console.WriteLine("Attempting to Get Server Port...");
+                        data = Encoding.ASCII.GetBytes(portNum.ToString());
+                        client.Send(data);
+                        Console.WriteLine("Port Number is " + portNum.ToString());
+                        Console.WriteLine("Port Number Sent");
+                        break;
+                    case "add":
+                        Console.WriteLine("Attempting to Add File {0} to List of Files", words[1]);
+                        //When we go to Add the file to the dictionary, we first check to see if the file is already there
+                        if (fileDict.ContainsKey(words[1]))
+                        {
+                            //If the File is already there, we Enqueue the Socket associated with it
+                            files.Add(words[1]);
+                            fileDict[words[1]].Add(clientInfo);
+                        }
+                        else
+                        {
+                            //If it isnt, the Key is added along with a new instance of a Socket Queue which we can access to add the socket
+                            fileDict.Add(words[1], new List<string>());
+                            fileDict[words[1]].Add(clientInfo);
+                            files.Add(words[1]);
+                        }
+                        data = Encoding.ASCII.GetBytes("Added File");
+                        client.Send(data);
+                        Console.WriteLine("Added File {0} to List of Files\n", words[1]);
+                        break;
+                    case "get":
+                        Console.WriteLine("Attempting to get Information for File {0}", words[1]);
+                        string fileInfo;
+                        string textToSend;
+                        if (fileDict.ContainsKey(words[1]))
+                        {
+                            fileInfo = fileDict[words[1]][0];
+                            textToSend = "The client is located at:" + fileInfo;
+
+                        }
+                        else
+                        {
+                            textToSend = "File Could not be Found";
+                        }
+                        Console.WriteLine(textToSend);
+                        Console.WriteLine();
+                        data = Encoding.ASCII.GetBytes(textToSend);
+                        client.Send(data);
+                        break;
+                    case "exit":
+                        client.Shutdown(SocketShutdown.Both);
+                        client.Close();
+                        clientList.Remove(client);
+                        clientInfoList.Remove(clientInfo);
+                        //Search through the fileDictionary to remove client info
+                        foreach (string file in files)
+                        {
+                            if(fileDict.ContainsKey(file))
+                            {
+                                foreach (string var in fileDict[file])
+                                {
+                                    if(var == clientInfo)
+                                    {
+                                        fileDict[file].Remove(var);
+                                    }
+                                }
+                            }
+                        }
+                        Console.WriteLine("Client Disconnected\n");
+                        return;
+                }
+            }
+           
+
+        }
+
         private static void AcceptCallback(IAsyncResult IAR)
         {
             Socket clientSocket;//= listenSocket.EndAccept(IAR);
@@ -127,6 +296,7 @@ namespace _499Server
 
         private static void RecvCallBack(IAsyncResult IAR)
         {
+            /*
             Socket socket = (Socket)IAR.AsyncState;
             int recv;
             try
@@ -185,13 +355,13 @@ namespace _499Server
                     if (fileDict.ContainsKey(words[1]))
                     {
                         //If the File is already there, we Enqueue the Socket associated with it
-                        fileDict[words[1]].Add(socket);
+                        //fileDict[words[1]].Add(socket);
                     }
                     else
                     {
                         //If it isnt, the Key is added along with a new instance of a Socket Queue which we can access to add the socket
-                        fileDict.Add(words[1], new List<Socket>());
-                        fileDict[words[1]].Add(socket);
+                        //fileDict.Add(words[1], new List<Socket>());
+                        //fileDict[words[1]].Add(socket);
                     }
                     data = Encoding.ASCII.GetBytes("Added File");
                     socket.Send(data);
@@ -203,16 +373,16 @@ namespace _499Server
                     string textToSend;
                     if (fileDict.ContainsKey(words[1]))
                     {
-                        fileSocket = fileDict[words[1]][0];
-                        IPEndPoint remoteIP = fileSocket.LocalEndPoint as IPEndPoint;
-                        textToSend = "The client is located at:" + remoteIP.Address + ":" + remoteIP.Port;
+                        //fileSocket = fileDict[words[1]][0];
+                        //IPEndPoint remoteIP = fileSocket.LocalEndPoint as IPEndPoint;
+                       // textToSend = "The client is located at:" + remoteIP.Address + ":" + remoteIP.Port;
 
                     }
                     else
                     {
                         textToSend = "File Could not be Found";
                     }
-                    Console.WriteLine(textToSend);
+                    //Console.WriteLine(textToSend);
                     Console.WriteLine();
                     data = Encoding.ASCII.GetBytes(textToSend);
                     socket.Send(data);
@@ -238,7 +408,10 @@ namespace _499Server
             {
                 Console.WriteLine(e.ToString());
             }
+            */
         }
+
+
         private static string Removespace(string text)
         {
             Console.WriteLine("Text Before remove white space: " + text);

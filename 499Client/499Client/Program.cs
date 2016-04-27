@@ -29,6 +29,7 @@ namespace _499Client
         private static List<Socket> otherClients;
 
         private static Socket listenSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        private static int listenPort;
         private static Socket clientConnectSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
         private static Socket serverConnectSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
 
@@ -46,20 +47,44 @@ namespace _499Client
 
         private static void InitClient()
         {
+            //Initialize Thread For listening
+            Thread clientConnectThread = new Thread(new ThreadStart(initListen));
+            clientConnectThread.Start();
+
             //Initialize Client Data
             //Connect to Server
-            Console.WriteLine("Please enter the local IP of the machine you wish to connect to.");
-            string IPstring = Console.ReadLine();
+            bool correctIPformat = false;
+            string[] IParray = null;
+            while(!correctIPformat)
+            {
+                Console.Clear();
+                Console.WriteLine("Please enter the local IP and port of the machine you wish to connect to, seperated by a ':' ");
+                string IPstring = Console.ReadLine();
+                IParray = FormatText(IPstring);
+                if (IParray.Length != 2)
+                {
+                    Console.WriteLine("Incorrect Format");
+                    correctIPformat = false;
+                }
+                else
+                {
+                    correctIPformat = true;
+                }
+            }
+            
             IPAddress serverIP;
+            int serverPort;
             try
             {
                 //IPstring = "192.168.0.2";
-                serverIP = IPAddress.Parse(IPstring);
+                serverIP = IPAddress.Parse(IParray[0]);
+                serverPort = Int32.Parse(IParray[1]);
+                Console.WriteLine("Attempting to Connect to IP {0} on Port {1}", serverIP, serverPort);
             }
             catch (Exception e)
             {
                 Console.WriteLine(e.ToString());
-                serverIP = IPAddress.Loopback;
+                return;
             }
 
             //Two threads: One to connect to server and send data, one to wait for a connection
@@ -67,14 +92,17 @@ namespace _499Client
             otherClients = new List<Socket>();
             buffr = new byte[buffrSize];
             fileList = new List<string>();
+            //DirectoryInfo dinfo = new DirectoryInfo(Environment.CurrentDirectory.ToString());
+            string path = Environment.CurrentDirectory.ToString();
+            fileList.AddRange(Directory.GetFiles(path, "*.txt"));
 
             //Thread To Connect to Server
-            //Thread servConnectThread = new Thread(() =>LoopConnect(serverIP));
-
+            //Thread servConnectThread = new Thread(() =>LoopConnect(serverIP, serverPort));
+            //servConnectThread.Start();
             //Thread to Listen for other Clients
-            //Thread clientConnectThread = new Thread(new ThreadStart(initListen));
-            //LoopConnect(serverIP, 100);
-            initListen();
+            
+            LoopConnect(serverIP, serverPort);
+            //initListen();
             //SendLoop(); Called from LoopConnect upong connection to server
         }
 
@@ -89,7 +117,7 @@ namespace _499Client
         private static void SendLoop()
         {
             Console.WriteLine("Type 'exit' to leave.");
-            getLocalIP();
+            Console.WriteLine("The Local IP is " + getLocalIP().ToString());
 
             while (true)
             {
@@ -101,6 +129,8 @@ namespace _499Client
 
                 if (words[0] == "exit")
                 {
+                    SendString("exit");
+                    RecvData();
                     Exit();
                 }
                 else if (words[0] == "get ip")
@@ -113,19 +143,23 @@ namespace _499Client
                     Console.WriteLine("Current Directory is: " + path);
 
                     path = path + @"\" + words[1];
-                    Console.WriteLine("File Path is: " + path);
+                    //Console.WriteLine("File Path is: " + path);
+                    bool exists = File.Exists(path) ? true : false;
                     Console.WriteLine(File.Exists(path) ? "File Exists" : "File Does Not Exist");
-
-                    req = string.Join(":", words[0], words[1]);
-                    Console.WriteLine("data to be sent looks like: " + req);
-                    SendString(req);
-                    RecvData();
+                    if (exists)
+                    {
+                        req = string.Join(":", words[0], words[1]);
+                        Console.WriteLine("data to be sent looks like: " + req);
+                        SendString(req);
+                        RecvData();
+                    }
 
                 }
                 else if (words[0] == "get")
                 {
                     SendString(req);
-                    RecvIP();
+                    Thread getFileThread = new Thread(new ThreadStart(RecvIP));
+                    getFileThread.Start();
                 }
                 else if (words[0] == "connect")
                 {
@@ -135,16 +169,15 @@ namespace _499Client
                     //And the client already tries to connect
                     //Mash these two together
 
-                    Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                    //Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
 
                 }
                 else
                 {
+                    req = string.Join("", words);
                     Console.WriteLine("data to be sent looks like: " + req);
                     SendString(req);
-                    Thread getFile = new Thread(new ThreadStart (RecvData));
-
-
+                    RecvData();
                 }
 
            
@@ -245,6 +278,10 @@ namespace _499Client
 
             Console.Clear();
             Console.WriteLine("Connected");
+            //Send text of file to get
+            //get file
+            //save file
+            //end
         }
 
         private static string[] FormatText(string text)
@@ -287,22 +324,74 @@ namespace _499Client
             IPHostEntry ipHost = Dns.GetHostEntry(Dns.GetHostName());
             IPAddress ipAddress = getLocalIP();
             Random rand = new Random();
-            int randPort = rand.Next(1024,60000);
-            //int fuckDavid = get new random integer really fucking high then print this out and use it as the port you listen on
-            IPEndPoint localEndPoint = new IPEndPoint(ipAddress, randPort);
+            listenPort = rand.Next(1024,60000);
+            IPEndPoint localEndPoint = new IPEndPoint(ipAddress, listenPort);
             Console.WriteLine("Listener Port is: " + localEndPoint.Port.ToString());
 
             try
             {
                 listenSocket.Bind(localEndPoint);
                 listenSocket.Listen(1);
-                listenSocket.BeginAccept(AcceptCallback, null);
+                //listenSocket.BeginAccept(AcceptCallback, null);
                 Console.WriteLine("Client Listen Initialized.");
+                ListenLoop();
             }
             catch (Exception e)
             {
                 Console.WriteLine(e.ToString());
             }
+        }
+
+        private static void ListenLoop()
+        {
+            while (true)
+            {
+                Socket handler;
+                try
+                {
+                    handler = listenSocket.Accept();
+                    otherClients.Add(handler);
+                    Thread clientServe = new Thread(() => ServeLoop(handler));
+                    clientServe.Start();
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e.ToString());
+                    return;
+                }
+
+                Console.WriteLine("Client has connected.");
+            }
+
+        }
+
+        private static void ServeLoop(Socket client)
+        {
+            while (true)
+            {
+                int recv;
+                byte[] recvBuff = new byte[buffrSize];
+                try
+                {
+                    recv = client.Receive(recvBuff, SocketFlags.None);
+                }
+                catch (SocketException)
+                {
+                    Console.Write("Client has disconnected.");
+                    client.Close();
+                    otherClients.Remove(client);
+                    return;
+                }
+
+                string text = Encoding.ASCII.GetString(recvBuff, 0, recv);
+                Console.WriteLine("Recieved: " + text);
+
+                //will recieve text of file to send
+                //send file
+                //end
+            }
+
+
         }
 
         private static void AcceptCallback(IAsyncResult IAR)
