@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading;
 
 namespace _499Server
 {
@@ -18,10 +19,12 @@ namespace _499Server
         private static byte[] buffr;// = new byte[1024];
 
         //A dictionary for storing files along with the client that owns them
-        private static Dictionary<string, Queue<Socket>> fileDict;
+        private static Dictionary<string, List<Socket>> fileDict;
 
         //A static variable for showing what port the server is operating on
         private static int portNum;
+        //Listens for Clients, each time a new client connects, give it a thread and serve it
+        //WE have a thread to listen for clients, each time a client connects, we give it a thread
 
         /*  THINGS TO THINK ABOUT/TO DO
 
@@ -37,19 +40,20 @@ namespace _499Server
                 A new thread for each client that connects?
                 A new thread in clients for connecting to another client for file transfer?
 
-            Dictionary <string, Queue<Socket> >
-                How to add a Socket to the Queue?
-
             Clients Sending Files
                 Clients should maybe send all files at once?
                 A list of files, each relating to the same socket
                 This would mean when a new client connects, we look at the list given, check our dictionary for the key, if it exists, add the socket to the list
 
             Serialization of Objects
-        */
+
+            Need to remove clients and their files from dictionary when a client disconnects
+            Check to see if other clients have a file before removing file
+         */
 
         static void Main(string[] args)
         {
+            Console.Title = "Server";
             InitServer();
 
             //Ensure the Console does not close right after the window opens
@@ -77,7 +81,7 @@ namespace _499Server
             listenSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
             clientList = new List<Socket>();
             buffr = new byte[1024];
-            fileDict = new Dictionary<string, Queue<Socket>>();
+            fileDict = new Dictionary<string, List<Socket>>();
             portNum = 100;
 
             //Get Connection Information
@@ -92,6 +96,7 @@ namespace _499Server
             {
                 listenSocket.Bind(localEndPoint);
                 listenSocket.Listen(5);
+                //Thread listenLoop = new Thread(new ThreadStart(ListenLoop));
                 listenSocket.BeginAccept(AcceptCallback, null);
                 Console.WriteLine("Server Initialized.");
             }
@@ -100,7 +105,7 @@ namespace _499Server
                 Console.WriteLine(e.ToString());
             }
         }
-
+        
         private static void AcceptCallback(IAsyncResult IAR)
         {
             Socket clientSocket;//= listenSocket.EndAccept(IAR);
@@ -112,6 +117,7 @@ namespace _499Server
             {
                 return;
             }
+
             clientList.Add(clientSocket);
             Console.WriteLine("Client has Connected...");
             clientSocket.BeginReceive(buffr, 0, buffr.Length, SocketFlags.None, RecvCallBack, clientSocket);
@@ -162,7 +168,7 @@ namespace _499Server
                     data = Encoding.ASCII.GetBytes(portNum.ToString());
                     socket.Send(data);
                     Console.WriteLine("Port Number is " + portNum.ToString());
-                    Console.WriteLine("Port Number Sent\n");
+                    Console.WriteLine("Port Number Sent");
                     break;
                 case "getservertime":
                     Console.WriteLine("Sending Time...");
@@ -176,13 +182,13 @@ namespace _499Server
                     if (fileDict.ContainsKey(words[1]))
                     {
                         //If the File is already there, we Enqueue the Socket associated with it
-                        fileDict[words[1]].Enqueue(socket);
+                        fileDict[words[1]].Add(socket);
                     }
                     else
                     {
                         //If it isnt, the Key is added along with a new instance of a Socket Queue which we can access to add the socket
-                        fileDict.Add(words[1], new Queue<Socket>());
-                        fileDict[words[1]].Enqueue(socket);
+                        fileDict.Add(words[1], new List<Socket>());
+                        fileDict[words[1]].Add(socket);
                     }
                     data = Encoding.ASCII.GetBytes("Added File");
                     socket.Send(data);
@@ -194,9 +200,9 @@ namespace _499Server
                     string textToSend;
                     if (fileDict.ContainsKey(words[1]))
                     {
-                        fileSocket = fileDict[words[1]].Dequeue();
+                        fileSocket = fileDict[words[1]][0];
                         IPEndPoint remoteIP = fileSocket.LocalEndPoint as IPEndPoint;
-                        textToSend = "The IP address of the client with file" + words[1] + " is " + remoteIP.Address + " with port number " + remoteIP.Port;
+                        textToSend = "The client is located at:" + remoteIP.Address + ":" + remoteIP.Port;
 
                     }
                     else

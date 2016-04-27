@@ -10,3 +10,9 @@ C:\Users\Dave\Documents\Visual Studio 2015\Projects\499NetworkingProject\499Serv
 C:\Users\Dave\Documents\Visual Studio 2015\Projects\499NetworkingProject\499Server\499Server\bin\Debug\499Server.exe
 C:\Users\Dave\Documents\Visual Studio 2015\Projects\499NetworkingProject\499Server\499Server\bin\Debug\499Server.pdb
 C:\Users\Dave\Documents\Visual Studio 2015\Projects\499NetworkingProject\499Server\499Server\obj\Debug\499Server.csprojResolveAssemblyReference.cache
+C:\Users\David\Desktop\499NetworkingProject\499Server\499Server\bin\Debug\499Server.exe.config
+C:\Users\David\Desktop\499NetworkingProject\499Server\499Server\obj\Debug\499Server.exe
+C:\Users\David\Desktop\499NetworkingProject\499Server\499Server\obj\Debug\499Server.pdb
+C:\Users\David\Desktop\499NetworkingProject\499Server\499Server\bin\Debug\499Server.exe
+C:\Users\David\Desktop\499NetworkingProject\499Server\499Server\bin\Debug\499Server.pdb
+C:\Users\David\Desktop\499NetworkingProject\499Server\499Server\obj\Debug\499Server.csprojResolveAssemblyReference.cache
