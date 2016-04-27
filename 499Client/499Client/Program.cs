@@ -70,10 +70,11 @@ namespace _499Client
 
             //Thread To Connect to Server
             //Thread servConnectThread = new Thread(() =>LoopConnect(serverIP));
-            
+
             //Thread to Listen for other Clients
-            Thread clientConnectThread = new Thread(new ThreadStart(initListen));
-            LoopConnect(serverIP, 100);
+            //Thread clientConnectThread = new Thread(new ThreadStart(initListen));
+            //LoopConnect(serverIP, 100);
+            initListen();
             //SendLoop(); Called from LoopConnect upong connection to server
         }
 
@@ -285,8 +286,11 @@ namespace _499Client
             Console.WriteLine("Intializing Listen on Client...");
             IPHostEntry ipHost = Dns.GetHostEntry(Dns.GetHostName());
             IPAddress ipAddress = getLocalIP();
+            Random rand = new Random();
+            int randPort = rand.Next(1024,60000);
             //int fuckDavid = get new random integer really fucking high then print this out and use it as the port you listen on
-            IPEndPoint localEndPoint = new IPEndPoint(ipAddress, );
+            IPEndPoint localEndPoint = new IPEndPoint(ipAddress, randPort);
+            Console.WriteLine("Listener Port is: " + localEndPoint.Port.ToString());
 
             try
             {
